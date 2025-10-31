@@ -1,0 +1,39 @@
+name: Python Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Executables (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+          cache: 'pip'
+
+      - name: Upgrade setuptools, wheel, and install requirements
+        run: |
+          pip install --upgrade setuptools wheel pyinstaller~=5.13.2 && pip install -r requirements.txt
+
+      - name: Build Pyinstaller
+        shell: pwsh
+        run: |
+          pyinstaller --onefile --name "MUSE-UCAS-OffersMonitor" --version-file version_info.txt --icon=assets/icon.svg --add-data "version_info.txt;." ucas_offers_monitor.py
+
+      - name: Upload executable to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: ./dist/MUSE-UCAS-OffersMonitor.exe
+          asset_name: MUSE-UCAS-OffersMonitor_windows_amd64_${{ github.ref_name }}.exe
+          tag: ${{ github.ref }}
+          overwrite: true
