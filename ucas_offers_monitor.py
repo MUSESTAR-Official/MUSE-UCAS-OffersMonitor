@@ -366,20 +366,29 @@ class UCASOffersMonitor:
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
                 'Cookie': self.config.get('cookies', ''),
                 'Referer': 'https://services.ucas.com/',
-                'Accept': '*/*',
-                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
                 'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin'
             }
             
-            response = requests.get(url, headers=headers)
+            session = requests.Session()
+            session.headers.update(headers)
+            
+            response = session.get(url, timeout=30)
             
             if response.status_code == 200:
                 if not response.text.strip():
                     print(f"❌ 服务器返回空响应")
                     return None
                 
+                if response.encoding is None or response.encoding == 'ISO-8859-1':
+                    response.encoding = 'utf-8'
+                
                 content_type = response.headers.get('content-type', '').lower()
-                if 'application/json' not in content_type:
+                if 'application/json' not in content_type and 'text/plain' not in content_type:
                     print(f"❌ 服务器返回非JSON格式响应，Content-Type: {content_type}")
                     print(f"响应内容前200字符: {response.text[:200]}")
                     return None
@@ -390,7 +399,22 @@ class UCASOffersMonitor:
                 except json.JSONDecodeError as json_err:
                     print(f"❌ JSON解析失败: {json_err}")
                     print(f"响应状态码: {response.status_code}")
-                    print(f"响应内容前200字符: {response.text[:200]}")
+                    print(f"响应编码: {response.encoding}")
+                    print(f"原始响应长度: {len(response.content)} bytes")
+                    print(f"文本响应长度: {len(response.text)} chars")
+                    print(f"响应内容前200字符: {repr(response.text[:200])}")
+                    try:
+                        for encoding in ['utf-8', 'utf-8-sig', 'gbk', 'gb2312']:
+                            try:
+                                decoded_text = response.content.decode(encoding)
+                                test_data = json.loads(decoded_text)
+                                print(f"使用 {encoding} 编码成功解析")
+                                return test_data.get('totalOffers', 0)
+                            except (UnicodeDecodeError, json.JSONDecodeError):
+                                continue
+                    except Exception as fallback_err:
+                        print(f"❌ 编码修复尝试失败: {fallback_err}")
+                    
                     return None
                     
             elif response.status_code == 401:
@@ -400,6 +424,9 @@ class UCASOffersMonitor:
                 print(f"响应内容: {response.text[:200]}")
                 return None
                 
+        except requests.exceptions.Timeout:
+            print(f"❌ 请求超时")
+            return None
         except requests.exceptions.RequestException as req_err:
             print(f"❌ 网络请求失败: {req_err}")
             return None
