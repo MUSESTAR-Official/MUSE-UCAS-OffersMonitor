@@ -28,7 +28,7 @@ jobs:
       - name: Build Pyinstaller
         shell: pwsh
         run: |
-          pyinstaller --onefile --name "MUSE-UCAS-OffersMonitor" --version-file version_info.txt --icon=assets/icon.svg --add-data "version_info.txt;." ucas_offers_monitor.py
+          pyinstaller --onefile --name "MUSE-UCAS-OffersMonitor" --version-file version_info.txt --icon=assets/icon.ico --add-data "version_info.txt;." ucas_offers_monitor.py
 
       - name: Upload executable to release
         uses: svenstaro/upload-release-action@v2
