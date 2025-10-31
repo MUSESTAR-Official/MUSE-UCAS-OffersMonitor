@@ -31,7 +31,6 @@ def get_version():
         return "0.0.0"
 
 def show_muse_banner():
-    """显示MUSE风格的banner"""
     banner = r"""
           _____                    _____                    _____                    _____          
          /\    \                  /\    \                  /\    \                  /\    \         
@@ -429,7 +428,7 @@ class UCASOffersMonitor:
             return False
         
         self.login_retry_count += 1
-        print(f"Cookies失效，尝试第{self.login_retry_count}次重新登录...")
+        print(f"Cookies失效，尝试第{self.login_retry_count}次重新登录")
         
         if self.login_with_credentials():
             self.save_config()
@@ -441,7 +440,7 @@ class UCASOffersMonitor:
             return False
 
     def monitor_offers(self):
-        print("开始监控UCAS Offers...")
+        print("开始监控UCAS Offers")
         
         while True:
             try:
@@ -489,7 +488,7 @@ class UCASOffersMonitor:
             if not self.setup_config():
                 return False
         
-        print("正在测试配置...")
+        print("正在测试配置")
         offers_count = self.get_offers_count()
         
         if offers_count == 'AUTH_FAILED':
@@ -510,7 +509,7 @@ class UCASOffersMonitor:
             print("❌ 配置测试失败")
             return False
         
-        print("\n开始监控UCAS Offers变化...")
+        print("\n开始监控UCAS Offers变化")
         print("-" * 60)
         self.monitor_offers()
         return True
@@ -537,7 +536,7 @@ def main():
                 print("\n程序已退出")
                 return
             elif choice == 'S':
-                print("\n重新启动程序...\n")
+                print("\n重新启动程序\n")
                 break
             else:
                 print("❌ 请输入 T (退出) 或 S (重新开始)")
