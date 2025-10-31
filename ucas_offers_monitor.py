@@ -87,12 +87,6 @@ class UCASOffersMonitor:
             print(f"配置文件保存失败: {e}")
     
     def setup_config(self):
-        
-        if self.config.get('cookies'):
-            use_existing = input("检测到已有配置，是否使用现有配置？(y/n): ").lower()
-            if use_existing == 'y':
-                return True
-        
         print("\n请选择登录方式:")
         print("1. 直接输入cookies")
         print("2. 使用账号密码登录")
@@ -380,15 +374,37 @@ class UCASOffersMonitor:
             response = requests.get(url, headers=headers)
             
             if response.status_code == 200:
-                data = response.json()
-                return data.get('totalOffers', 0)
+                if not response.text.strip():
+                    print(f"❌ 服务器返回空响应")
+                    return None
+                
+                content_type = response.headers.get('content-type', '').lower()
+                if 'application/json' not in content_type:
+                    print(f"❌ 服务器返回非JSON格式响应，Content-Type: {content_type}")
+                    print(f"响应内容前200字符: {response.text[:200]}")
+                    return None
+                
+                try:
+                    data = response.json()
+                    return data.get('totalOffers', 0)
+                except json.JSONDecodeError as json_err:
+                    print(f"❌ JSON解析失败: {json_err}")
+                    print(f"响应状态码: {response.status_code}")
+                    print(f"响应内容前200字符: {response.text[:200]}")
+                    return None
+                    
             elif response.status_code == 401:
                 return 'AUTH_FAILED'
             else:
+                print(f"❌ 请求失败，状态码: {response.status_code}")
+                print(f"响应内容: {response.text[:200]}")
                 return None
                 
+        except requests.exceptions.RequestException as req_err:
+            print(f"❌ 网络请求失败: {req_err}")
+            return None
         except Exception as e:
-            print(f"获取offers信息失败: {e}")
+            print(f"❌ 获取offers信息失败: {e}")
             return None
     
     def send_bark_notification(self, title, message):
@@ -440,7 +456,6 @@ class UCASOffersMonitor:
             return False
 
     def monitor_offers(self):
-        print("开始监控UCAS Offers")
         
         while True:
             try:
@@ -484,7 +499,14 @@ class UCASOffersMonitor:
     def run(self):
         show_muse_banner()
         
-        if not self.config.get('cookies'):
+        if self.config.get('cookies'):
+            print("检测到已有配置")
+            use_existing = input("是否使用现有配置？(y/n): ").lower()
+            if use_existing != 'y':
+                if not self.setup_config():
+                    return False
+        else:
+            print("未检测到配置文件")
             if not self.setup_config():
                 return False
         
@@ -510,7 +532,6 @@ class UCASOffersMonitor:
             return False
         
         print("\n开始监控UCAS Offers变化")
-        print("-" * 60)
         self.monitor_offers()
         return True
 
