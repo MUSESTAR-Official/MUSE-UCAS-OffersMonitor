@@ -36,7 +36,7 @@ VSVersionInfo(
         StringStruct(u'LegalCopyright', u'© 2025 MUSESTAR'),
         StringStruct(u'OriginalFilename', u'MUSE-UCAS-OffersMonitor.exe'),
         StringStruct(u'ProductName', u'MUSE UCAS Offers Monitor'),
-        StringStruct(u'ProductVersion', u'1.0.3')])
+        StringStruct(u'ProductVersion', u'1.0.4')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
   ]
