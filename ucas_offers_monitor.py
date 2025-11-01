@@ -395,9 +395,7 @@ class UCASOffersMonitor:
                 
                 try:
                     data = response.json()
-                    # 优先使用numberOfOffersMade字段，如果不存在则使用totalOffers作为备选
-                    offers_count = data.get('numberOfOffersMade', data.get('totalOffers', 0))
-                    print(f"解析到的offers数量: {offers_count}")
+                    offers_count = data.get('numberOfOffersMade',-999)
                     return offers_count
                 except json.JSONDecodeError as json_err:
                     print(f"❌ JSON解析失败: {json_err}")
@@ -411,10 +409,8 @@ class UCASOffersMonitor:
                             try:
                                 decoded_text = response.content.decode(encoding)
                                 test_data = json.loads(decoded_text)
-                                print(f"✅ 使用 {encoding} 编码成功解析")
-                                # 优先使用numberOfOffersMade字段，如果不存在则使用totalOffers作为备选
-                                offers_count = test_data.get('numberOfOffersMade', test_data.get('totalOffers', 0))
-                                print(f"解析到的offers数量: {offers_count}")
+                                print(f"使用 {encoding} 编码成功解析")
+                                offers_count = test_data.get('numberOfOffersMade',-999)
                                 return offers_count
                             except (UnicodeDecodeError, json.JSONDecodeError):
                                 continue
