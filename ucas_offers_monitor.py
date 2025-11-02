@@ -514,16 +514,16 @@ class UCASOffersMonitor:
                     else:
                         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 当前offers数量: {current_offers} (无变化)")
                 else:
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 获取offers信息失败，60秒后重试")
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 获取offers信息失败，180秒后重试")
                 
-                time.sleep(60)
+                time.sleep(180)
                 
             except KeyboardInterrupt:
                 print("\n监控已停止")
                 break
             except Exception as e:
                 print(f"监控过程中发生错误: {e}")
-                time.sleep(60)
+                time.sleep(180)
     
     def run(self):
         show_muse_banner()
