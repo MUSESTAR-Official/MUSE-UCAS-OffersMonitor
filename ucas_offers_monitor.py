@@ -565,7 +565,10 @@ class UCASOffersMonitor:
                     self.send_bark_notification("❌ 监控已停止", "获取UCAS数据失败，监控已停止，请检查网络或登录状态", critical=False)
                     break
                 
-                time.sleep(180)
+                now_ldn_sleep = datetime.now(ZoneInfo("Europe/London"))
+                end_ldn_sleep = now_ldn_sleep.replace(hour=20, minute=0, second=0, microsecond=0)
+                seconds_to_end = max(1, int((end_ldn_sleep - now_ldn_sleep).total_seconds()))
+                time.sleep(min(180, seconds_to_end))
                 
             except KeyboardInterrupt:
                 print("\n监控已停止")
