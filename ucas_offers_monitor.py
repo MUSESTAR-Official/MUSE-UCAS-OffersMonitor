@@ -5,7 +5,8 @@ import os
 import sys
 import signal
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from urllib.parse import quote
 import base64
 import uuid
@@ -510,6 +511,20 @@ class UCASOffersMonitor:
         
         while True:
             try:
+                now_ldn = datetime.now(ZoneInfo("Europe/London"))
+                start_ldn = now_ldn.replace(hour=8, minute=0, second=0, microsecond=0)
+                end_ldn = now_ldn.replace(hour=20, minute=0, second=0, microsecond=0)
+
+                if not (start_ldn <= now_ldn < end_ldn):
+                    if now_ldn < start_ldn:
+                        next_start = start_ldn
+                    else:
+                        next_start = (now_ldn + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+                    sleep_seconds = max(60, int((next_start - now_ldn).total_seconds()))
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 非监测时段（伦敦时间8:00-20:00），待机至 {next_start.strftime('%Y-%m-%d %H:%M')}")
+                    time.sleep(sleep_seconds)
+                    continue
+
                 info = self.get_offers_info()
                 current_offers = info if isinstance(info, (str, type(None))) else info.get('count')
                 
