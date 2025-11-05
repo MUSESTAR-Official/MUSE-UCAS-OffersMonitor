@@ -6,10 +6,10 @@ import sys
 import signal
 import re
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 from urllib.parse import quote
 import base64
 import uuid
+import pytz
 
 def get_version():
     try:
@@ -511,9 +511,10 @@ class UCASOffersMonitor:
         
         while True:
             try:
-                now_ldn = datetime.now(ZoneInfo("Europe/London"))
-                start_ldn = now_ldn.replace(hour=8, minute=0, second=0, microsecond=0)
-                end_ldn = now_ldn.replace(hour=20, minute=0, second=0, microsecond=0)
+                london_tz = pytz.timezone("Europe/London")
+                now_ldn = datetime.now(london_tz)
+                start_ldn = london_tz.localize(datetime(now_ldn.year, now_ldn.month, now_ldn.day, 8, 0, 0))
+                end_ldn = london_tz.localize(datetime(now_ldn.year, now_ldn.month, now_ldn.day, 20, 0, 0))
 
                 if not (start_ldn <= now_ldn < end_ldn):
                     if now_ldn < start_ldn:
@@ -565,8 +566,8 @@ class UCASOffersMonitor:
                     self.send_bark_notification("❌ 监控已停止", "获取UCAS数据失败，监控已停止，请检查网络或登录状态", critical=False)
                     break
                 
-                now_ldn_sleep = datetime.now(ZoneInfo("Europe/London"))
-                end_ldn_sleep = now_ldn_sleep.replace(hour=20, minute=0, second=0, microsecond=0)
+                now_ldn_sleep = datetime.now(london_tz)
+                end_ldn_sleep = london_tz.localize(datetime(now_ldn_sleep.year, now_ldn_sleep.month, now_ldn_sleep.day, 20, 0, 0))
                 seconds_to_end = max(1, int((end_ldn_sleep - now_ldn_sleep).total_seconds()))
                 time.sleep(min(180, seconds_to_end))
                 
