@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 import base64
 import uuid
-import pytz
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
 
 def get_version():
     try:
@@ -459,6 +462,19 @@ class UCASOffersMonitor:
             print(f"❌ 获取offers信息失败: {e}")
             return None
     
+    def is_london_dst(self, dt):
+        year = dt.year
+        
+        march_last_day = datetime(year, 3, 31)
+        march_last_sunday = march_last_day - timedelta(days=(march_last_day.weekday() + 1) % 7)
+        dst_start = datetime(year, 3, march_last_sunday.day, 1, 0, 0)
+        
+        october_last_day = datetime(year, 10, 31)
+        october_last_sunday = october_last_day - timedelta(days=(october_last_day.weekday() + 1) % 7)
+        dst_end = datetime(year, 10, october_last_sunday.day, 1, 0, 0)
+        
+        return dst_start <= dt < dst_end
+    
     def send_bark_notification(self, title, message, critical=True):
         try:
             bark_key = self.config.get('bark_key')
@@ -511,10 +527,18 @@ class UCASOffersMonitor:
         
         while True:
             try:
-                london_tz = pytz.timezone("Europe/London")
-                now_ldn = datetime.now(london_tz)
-                start_ldn = london_tz.localize(datetime(now_ldn.year, now_ldn.month, now_ldn.day, 8, 0, 0))
-                end_ldn = london_tz.localize(datetime(now_ldn.year, now_ldn.month, now_ldn.day, 20, 0, 0))
+                if ZoneInfo:
+                    now_ldn = datetime.now(ZoneInfo('Europe/London'))
+                    start_ldn = now_ldn.replace(hour=8, minute=0, second=0, microsecond=0)
+                    end_ldn = now_ldn.replace(hour=20, minute=0, second=0, microsecond=0)
+                else:
+                    now_utc = datetime.utcnow()
+                    is_dst = self.is_london_dst(now_utc)
+                    london_offset = 1 if is_dst else 0
+                    now_ldn = now_utc + timedelta(hours=london_offset)
+                    
+                    start_ldn = datetime(now_ldn.year, now_ldn.month, now_ldn.day, 8, 0, 0)
+                    end_ldn = datetime(now_ldn.year, now_ldn.month, now_ldn.day, 20, 0, 0)
 
                 if not (start_ldn <= now_ldn < end_ldn):
                     if now_ldn < start_ldn:
@@ -566,8 +590,15 @@ class UCASOffersMonitor:
                     self.send_bark_notification("❌ 监控已停止", "获取UCAS数据失败，监控已停止，请检查网络或登录状态", critical=False)
                     break
                 
-                now_ldn_sleep = datetime.now(london_tz)
-                end_ldn_sleep = london_tz.localize(datetime(now_ldn_sleep.year, now_ldn_sleep.month, now_ldn_sleep.day, 20, 0, 0))
+                if ZoneInfo:
+                    now_ldn_sleep = datetime.now(ZoneInfo('Europe/London'))
+                    end_ldn_sleep = now_ldn_sleep.replace(hour=20, minute=0, second=0, microsecond=0)
+                else:
+                    now_utc_sleep = datetime.utcnow()
+                    is_dst_sleep = self.is_london_dst(now_utc_sleep)
+                    london_offset_sleep = 1 if is_dst_sleep else 0
+                    now_ldn_sleep = now_utc_sleep + timedelta(hours=london_offset_sleep)
+                    end_ldn_sleep = datetime(now_ldn_sleep.year, now_ldn_sleep.month, now_ldn_sleep.day, 20, 0, 0)
                 seconds_to_end = max(1, int((end_ldn_sleep - now_ldn_sleep).total_seconds()))
                 time.sleep(min(180, seconds_to_end))
                 
