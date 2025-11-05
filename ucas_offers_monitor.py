@@ -358,10 +358,11 @@ class UCASOffersMonitor:
             print(f"❌ 登录失败: {e}")
             return False
     
-    def get_offers_count(self):
+
+    def get_offers_info(self):
         try:
             url = "https://services.ucas.com/track/service/ugtrackapi/application/applicationstatusmessage"
-            
+
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
                 'Cookie': self.config.get('cookies', ''),
@@ -373,30 +374,51 @@ class UCASOffersMonitor:
                 'Sec-Fetch-Mode': 'cors',
                 'Sec-Fetch-Site': 'same-origin'
             }
-            
+
             session = requests.Session()
             session.headers.update(headers)
-            
+
             response = session.get(url, timeout=30)
-            
+
+            def extract_details(data_dict):
+                details = {'university': None, 'course': None, 'update_time': None}
+                latest = data_dict.get('latestUpdate') or {}
+                update_text = latest.get('updateText') or {}
+                values = update_text.get('values') or []
+                picked = []
+                for v in values:
+                    if v is None:
+                        continue
+                    if isinstance(v, str) and v.strip():
+                        picked.append(v.strip())
+                    if len(picked) >= 2:
+                        break
+                if picked:
+                    details['university'] = picked[0]
+                if len(picked) >= 2:
+                    details['course'] = picked[1]
+                details['update_time'] = latest.get('updateDateTime')
+                return details
+
             if response.status_code == 200:
                 if not response.text.strip():
                     print(f"❌ 服务器返回空响应")
                     return None
-                
+
                 if response.encoding is None or response.encoding == 'ISO-8859-1':
                     response.encoding = 'utf-8'
-                
+
                 content_type = response.headers.get('content-type', '').lower()
                 if 'application/json' not in content_type and 'text/plain' not in content_type:
                     print(f"❌ 服务器返回非JSON格式响应，Content-Type: {content_type}")
                     print(f"响应内容前200字符: {response.text[:200]}")
                     return None
-                
+
                 try:
                     data = response.json()
-                    offers_count = data.get('numberOfOffersMade',-999)
-                    return offers_count
+                    offers_count = data.get('numberOfOffersMade', -999)
+                    details = extract_details(data)
+                    return {'count': offers_count, 'details': details}
                 except json.JSONDecodeError as json_err:
                     print(f"❌ JSON解析失败: {json_err}")
                     print(f"响应状态码: {response.status_code}")
@@ -410,22 +432,22 @@ class UCASOffersMonitor:
                                 decoded_text = response.content.decode(encoding)
                                 test_data = json.loads(decoded_text)
                                 print(f"使用 {encoding} 编码成功解析")
-                                offers_count = test_data.get('numberOfOffersMade',-999)
-                                return offers_count
+                                offers_count = test_data.get('numberOfOffersMade', -999)
+                                details = extract_details(test_data)
+                                return {'count': offers_count, 'details': details}
                             except (UnicodeDecodeError, json.JSONDecodeError):
                                 continue
                     except Exception as fallback_err:
                         print(f"❌ 编码修复尝试失败: {fallback_err}")
-                    
                     return None
-                    
+
             elif response.status_code == 401:
                 return 'AUTH_FAILED'
             else:
                 print(f"❌ 请求失败，状态码: {response.status_code}")
                 print(f"响应内容: {response.text[:200]}")
                 return None
-                
+
         except requests.exceptions.Timeout:
             print(f"❌ 请求超时")
             return None
@@ -436,7 +458,7 @@ class UCASOffersMonitor:
             print(f"❌ 获取offers信息失败: {e}")
             return None
     
-    def send_bark_notification(self, title, message):
+    def send_bark_notification(self, title, message, critical=True):
         try:
             bark_key = self.config.get('bark_key')
             if not bark_key:
@@ -444,8 +466,8 @@ class UCASOffersMonitor:
             
             encoded_message = quote(message)
             encoded_title = quote(title)
-            
-            url = f"https://api.day.app/{bark_key}/{encoded_message}?title={encoded_title}&level=critical&volume=10&call=1&icon=https://data.musestar.cc/files/ms.png"
+            base = f"https://api.day.app/{bark_key}/{encoded_message}?title={encoded_title}&icon=https://data.musestar.cc/files/ms.png"
+            url = base if not critical else f"{base}&level=critical&volume=10&call=1"
             
             response = requests.get(url)
             if response.status_code == 200:
@@ -463,13 +485,13 @@ class UCASOffersMonitor:
         if not self.config.get('username') or not self.config.get('password'):
             message = "Cookies已失效，但未保存账号密码，无法自动重新登录"
             print(f"❌ UCAS登录失效: {message}")
-            self.send_bark_notification("❌ UCAS登录失效", message)
+            self.send_bark_notification("❌ UCAS登录失效", message, critical=False)
             return False
         
         if self.login_retry_count >= self.max_login_retries:
             message = f"已尝试{self.max_login_retries}次重新登录均失败，请检查问题"
             print(f"❌ UCAS登录失败: {message}")
-            self.send_bark_notification("❌ UCAS登录失败", message)
+            self.send_bark_notification("❌ UCAS登录失败", message, critical=False)
             return False
         
         self.login_retry_count += 1
@@ -488,7 +510,8 @@ class UCASOffersMonitor:
         
         while True:
             try:
-                current_offers = self.get_offers_count()
+                info = self.get_offers_info()
+                current_offers = info if isinstance(info, (str, type(None))) else info.get('count')
                 
                 if current_offers == 'AUTH_FAILED':
                     if not self.handle_auth_failure():
@@ -503,7 +526,16 @@ class UCASOffersMonitor:
                         change = current_offers - self.last_offers_count
                         if change > 0:
                             title = "🎉您收到了一封新的Offer"
-                            message = f"请前往UCAS官网查看！新增{change}个offer，当前总数: {current_offers}"
+                            details = info.get('details') if isinstance(info, dict) else None
+                            uni = (details or {}).get('university')
+                            course = (details or {}).get('course')
+                            if uni or course:
+                                uni_text = uni if uni else "未知学校"
+                                course_text = course if course else "未知专业"
+                                offer_line = f"新增Offer: {uni_text} - {course_text}"
+                                message = f"{offer_line}！请前往UCAS官网查看！当前总数: {current_offers}"
+                            else:
+                                message = f"请前往UCAS官网查看！当前总数: {current_offers}"
                         else:
                             title = "Offers状态更新"
                             message = f"您的offers数量从 {self.last_offers_count} 变更为 {current_offers}"
@@ -514,7 +546,9 @@ class UCASOffersMonitor:
                     else:
                         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 当前offers数量: {current_offers} (无变化)")
                 else:
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 获取offers信息失败，180秒后重试")
+                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 获取offers信息失败，监控已停止")
+                    self.send_bark_notification("❌ 监控已停止", "获取UCAS数据失败，监控已停止，请检查网络或登录状态", critical=False)
+                    break
                 
                 time.sleep(180)
                 
@@ -523,7 +557,8 @@ class UCASOffersMonitor:
                 break
             except Exception as e:
                 print(f"监控过程中发生错误: {e}")
-                time.sleep(180)
+                self.send_bark_notification("❌ 监控已停止", f"发生错误: {e}", critical=False)
+                break
     
     def run(self):
         show_muse_banner()
@@ -540,12 +575,14 @@ class UCASOffersMonitor:
                 return False
         
         print("正在测试配置")
-        offers_count = self.get_offers_count()
+        info = self.get_offers_info()
+        offers_count = info if isinstance(info, (str, type(None))) else info.get('count')
         
         if offers_count == 'AUTH_FAILED':
             if not self.handle_auth_failure():
                 return False
-            offers_count = self.get_offers_count()
+            info = self.get_offers_info()
+            offers_count = info if isinstance(info, (str, type(None))) else info.get('count')
         
         if offers_count is not None and offers_count != 'AUTH_FAILED':
             print(f"配置测试成功，当前offers数量: {offers_count}")
